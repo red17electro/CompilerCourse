@@ -1,0 +1,319 @@
+package minijava.syntax;
+
+import minijava.ast.*;
+import static minijava.ast.MJ.*;
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.function.Consumer;
+import frontend.SyntaxError;
+import frontend.AstHelper;
+import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
+
+
+class MiniJavaParser;
+   
+// Parser code to change the way the parser reports errors (include
+// line and column number of the error). 
+parser code {:
+    
+    private Consumer<SyntaxError> onError;
+
+    public void onError(Consumer<SyntaxError> onError) {
+        this.onError = onError;
+    }
+    
+
+    @Override
+    public void syntax_error(Symbol info) {
+
+        List<Integer> expectedTokens = expected_token_ids();
+        
+        int line, column;
+        StringBuilder message = new StringBuilder("Unexpected token ");
+        if (info instanceof ComplexSymbol) {
+            ComplexSymbol s = (ComplexSymbol) info;
+            line = s.getLeft().getLine();
+            column = s.getLeft().getColumn();
+            
+            message.append(s.getName());
+            
+            if (s.value != null) {
+                message.append("(");
+                message.append(s.value);
+                message.append(")");
+            }
+        } else {
+            line = cur_token.left;
+            column = cur_token.right;
+        }
+        
+        if (!expectedTokens.isEmpty()) {
+            message.append(", expected one of the following: ");
+            boolean first = true;
+            for (int expected : expectedTokens){
+                if (!first) {
+                    message.append(", ");
+                }
+                message.append(symbl_name_from_id(expected));
+                first = false;
+            }
+        }
+        
+        
+        SyntaxError err = new SyntaxError(message.toString(), line, column);
+        if (onError == null) {
+            System.err.println(err);
+        } else {
+            onError.accept(err);
+        }
+    }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        // ignore
+    }
+    
+:};
+   
+
+   
+/* ------------Declaration of Terminals and Non Terminals Section----------- */
+
+terminal INVALID_TOKEN;
+
+// Java keywords:
+terminal ABSTRACT,  CONTINUE,   FOR,          NEW,         SWITCH,
+         ASSERT,    DEFAULT,    IF,           PACKAGE,     SYNCHRONIZED,
+         BOOLEAN,   DO,         GOTO,         PRIVATE,     THIS,
+         BREAK,     DOUBLE,     IMPLEMENTS,   PROTECTED,   THROW,
+         BYTE,      ELSE,       IMPORT,       PUBLIC,      THROWS,
+         CASE,      ENUM,       INSTANCEOF,   RETURN,      TRANSIENT,
+         CATCH,     EXTENDS,    INT,          SHORT,       TRY,
+         CHAR,      FINAL,      INTERFACE,    STATIC,      VOID,
+         CLASS,     FINALLY,    LONG,         STRICTFP,    VOLATILE,
+         CONST,     FLOAT,      NATIVE,       SUPER,       WHILE;
+
+// additional keywords:
+terminal MAIN, STRING, LENGTH, SYSTEM, OUT, PRINTLN;
+
+// symbols:
+terminal LBRACE, RBRACE, // { }
+         LBRACKET, RBRACKET, // [ ]
+         LPAREN, RPAREN, // ()
+         DOT, SEMI, COMMA, EQ, NEG, AND, PLUS, MINUS, TIMES, DIV, LESS, EQUALS;
+
+// literals:
+terminal TRUE, FALSE, NULL;
+
+// for precedence only:
+terminal UMINUS;
+
+terminal String   NUMBER, ID;
+   
+// Non terminals used in the grammar section.  
+non terminal MJProgram program;
+non terminal MJMainClass mainClass;
+non terminal MJClassDecl classDecl;
+non terminal MJClassDeclList classDeclList;
+non terminal MJVarDecl varDecl;
+non terminal MJMethodDecl methodDecl;
+non terminal MJVarDeclList paramList, paramListRest;
+non terminal MJType type;
+non terminal MJBlock block;
+non terminal MJStatement statement;
+non terminal MJBlock statementList;
+non terminal MJStatement blockStatement;
+non terminal MJExpr expr, expr2;
+non terminal MJExprList exprList, exprListRest;
+non terminal List<MJMemberDecl> memberDeclList;
+
+
+precedence right EQ;
+precedence left AND;
+precedence left EQUALS;
+precedence left LESS;
+precedence left PLUS, MINUS;
+precedence left TIMES, DIV;
+precedence nonassoc NEG, UMINUS;
+precedence left DOT;
+precedence nonassoc LBRACKET;
+
+
+/* ----------------------------Grammar Section-------------------- */
+   
+
+program ::=
+        mainClass:m classDeclList:c
+            {: RESULT = Program(m, c); :}
+        ;
+
+
+mainClass ::=
+        CLASS ID:n LBRACE PUBLIC STATIC VOID MAIN LPAREN STRING LBRACKET RBRACKET  ID:a RPAREN block:b RBRACE
+            {: RESULT = MainClass(n, a, b);  :}
+        ;
+
+classDeclList ::=
+        classDecl:c classDeclList:l
+            {: RESULT = l; l.add(0, c); :}
+      | /* empty */
+            {: RESULT = ClassDeclList(); :}
+      ;
+
+classDecl ::=
+        CLASS ID:name LBRACE memberDeclList:members RBRACE
+            {: RESULT = AstHelper.ClassDecl(name, null, members); :}
+      | CLASS ID:name EXTENDS ID:ext LBRACE memberDeclList:members RBRACE
+            {: RESULT = AstHelper.ClassDecl(name, ext, members); :}
+      ;
+
+memberDeclList ::=
+        varDecl:v SEMI memberDeclList:l
+            {: RESULT = l; l.add(0, v); :}
+      | methodDecl:m memberDeclList:l
+            {: RESULT = l; l.add(0, m); :}
+      |
+            {: RESULT = new LinkedList<>(); :}
+      ;
+
+varDecl ::=
+        type:t ID:n
+            {: RESULT = VarDecl(t, n); :}
+        ;
+
+methodDecl ::=
+        type:returnType ID:name LPAREN paramList:params RPAREN block:body
+            {: RESULT = MethodDecl(returnType, name, params, body); :}
+        ;
+
+paramList ::=
+        varDecl:v paramListRest:l
+            {: RESULT = l; l.addFront(v); :}
+     |
+            {: RESULT = VarDeclList(); :}
+     ;
+
+paramListRest ::=
+        COMMA varDecl:v paramListRest:r
+            {: RESULT = r; r.addFront(v); :}
+      |
+            {: RESULT = VarDeclList(); :}
+      ;
+
+exprList ::=
+        expr:e exprListRest:l
+            {: RESULT = l; l.addFront(e); :}
+      |
+            {: RESULT = ExprList(); :}
+      ;
+
+exprListRest ::=
+        COMMA expr:e exprListRest:r
+            {: RESULT = r; r.addFront(e); :}
+      |
+            {: RESULT = ExprList(); :}
+      ;
+
+type ::=
+        INT LBRACKET RBRACKET
+            {: RESULT = TypeIntArray(); :}
+      | BOOLEAN
+            {: RESULT = TypeBool(); :}
+      | INT
+            {: RESULT = TypeInt(); :}
+      | ID:n
+            {: RESULT = TypeClass(n); :}
+      ;
+
+block ::=
+        LBRACE statementList:l RBRACE
+            {: RESULT = l; :}
+        ;
+
+statementList ::=
+        blockStatement:s statementList:l
+            {: RESULT = l; l.addFront(s); :}
+      |
+            {: RESULT = Block(); :}
+      ;
+
+blockStatement ::=
+        statement:s
+            {: RESULT = s; :}
+      | type:t ID:n SEMI
+            {: RESULT = VarDecl(t, n); :}
+      ;
+
+statement ::=
+        block:b
+            {: RESULT = b; :}
+      | IF LPAREN expr:c RPAREN statement:t ELSE statement:e
+            {: RESULT = StmtIf(c, t, e); :}
+      | WHILE LPAREN expr:c RPAREN statement:b
+            {: RESULT = StmtWhile(c, b); :}
+      | RETURN expr:e SEMI
+            {: RESULT = StmtReturn(e); :}
+      | SYSTEM DOT OUT DOT PRINTLN LPAREN expr:e RPAREN SEMI
+            {: RESULT = StmtPrint(e); :}
+      | expr:e SEMI
+            {: RESULT = StmtExpr(e); :}
+      | expr:l EQ expr:r SEMI
+            {: RESULT = StmtAssign(l, r); :}
+      ;
+
+
+expr ::=
+        NEW INT LBRACKET expr:size RBRACKET
+            {: RESULT = NewIntArray(size); :}
+      | expr2:e
+            {: RESULT = e; :}
+      ;
+
+expr2 ::=
+        expr:l AND expr:r
+            {: RESULT = ExprBinary(l, And(), r); :}
+      | expr:l PLUS expr:r
+            {: RESULT = ExprBinary(l, Plus(), r); :}
+      | expr:l MINUS expr:r
+            {: RESULT = ExprBinary(l, Minus(), r); :}
+      | expr:l TIMES expr:r
+            {: RESULT = ExprBinary(l, Times(), r); :}
+      | expr:l DIV expr:r
+            {: RESULT = ExprBinary(l, Div(), r); :}
+      | expr:l EQUALS expr:r
+            {: RESULT = ExprBinary(l, Equals(), r); :}
+      | expr:l LESS expr:r
+                  {: RESULT = ExprBinary(l, Less(), r); :}
+      | NEG expr:e
+            {: RESULT = ExprUnary(Negate(), e); :}
+      | MINUS expr:e
+            {: RESULT = ExprUnary(UnaryMinus(), e); :}
+             %prec UMINUS
+      | expr2:a LBRACKET expr:i RBRACKET
+            {: RESULT = ArrayLookup(a, i); :}
+      | expr:a DOT LENGTH
+                  {: RESULT = ArrayLength(a); :}
+      | expr:r DOT ID:n
+            {: RESULT = FieldAccess(r, n); :}
+      | expr:r DOT ID:m LPAREN exprList:args RPAREN
+            {: RESULT = MethodCall(r, m, args); :}
+      | TRUE
+            {: RESULT = BoolConst(true); :}
+      | FALSE
+            {: RESULT = BoolConst(false); :}
+      | ID:i
+            {: RESULT = VarUse(i); :}
+      | NUMBER:n
+            {: RESULT = Number(Integer.parseInt(n)); :}
+      | THIS
+            {: RESULT = ExprThis(); :}
+      | NULL
+            {: RESULT = ExprNull(); :}
+      | NEW ID:c LPAREN RPAREN
+            {: RESULT = NewObject(c); :}
+      | LPAREN expr:e RPAREN
+            {: RESULT = e; :}
+      ;
+

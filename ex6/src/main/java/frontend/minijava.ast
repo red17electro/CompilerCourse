@@ -1,0 +1,92 @@
+package minijava.ast
+
+typeprefix: MJ
+
+abstract syntax:
+
+Program(MainClass mainClass, ClassDeclList classDecls)
+
+MainClass(String name, String argsName, Block mainBody)
+
+ClassDecl(String name, Extended extended, VarDeclList fields, MethodDeclList methods)
+
+Extended =
+    ExtendsNothing()
+  | ExtendsClass(String name)
+
+VarDecl(Type type, String name)
+
+MethodDecl(Type returnType, String name, VarDeclList formalParameters, Block methodBody)
+
+MemberDecl =
+    VarDecl
+  | MethodDecl
+
+Type =
+    TypeIntArray()
+  | TypeInt()
+  | TypeBool()
+  | TypeClass(String name)
+
+Statement =
+    Block
+  | StmtIf(Expr condition, Statement ifTrue, Statement ifFalse)
+  | StmtWhile(Expr condition, Statement loopBody)
+  | StmtReturn(Expr result)
+  | StmtPrint(Expr printed)
+  | VarDecl
+  | StmtExpr(Expr expr)
+  | StmtAssign(Expr left, Expr right)
+
+Expr =
+    ExprBinary(Expr left, Operator operator, Expr right)
+  | ExprUnary(UnaryOperator unaryOperator, Expr expr)
+  | ArrayLookup(Expr arrayExpr, Expr arrayIndex)
+  | ArrayLength(Expr arrayExpr)
+  | FieldAccess(Expr receiver, String fieldName)
+  | MethodCall(Expr receiver, String methodName, ExprList arguments)
+  | BoolConst(boolean boolValue)
+  | VarUse(String varName)
+  | Number(int intValue)
+  | ExprThis()
+  | ExprNull()
+  | NewIntArray(Expr arraySize)
+  | NewObject(String className)
+
+Operator =
+    And()
+  | Plus()
+  | Minus()
+  | Times()
+  | Div()
+  | Less()
+  | Equals()
+
+UnaryOperator =
+    UnaryMinus()
+  | Negate()
+
+
+// List types
+ClassDeclList * ClassDecl
+VarDeclList * VarDecl
+MethodDeclList * MethodDecl
+Block * Statement
+ExprList * Expr
+
+// <ex3>
+VarRef = FieldAccess | VarUse
+// </ex3>
+
+attributes:
+
+"information about the source code"
+frontend.SourcePosition Element.sourcePosition
+
+// <ex3>
+MJVarDecl VarRef.variableDeclaration
+MJMethodDecl MethodCall.methodDeclaration
+MJClassDecl NewObject.classDeclaration
+MJClassDecl ClassDecl.directSuperClass
+MJClassDecl TypeClass.classDeclaration
+// </ex3>

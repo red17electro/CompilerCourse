@@ -1,0 +1,70 @@
+package mips.ast
+
+typeprefix: Mips
+
+abstract syntax:
+
+
+Prog(StmtList stmts)
+
+Stmt =
+	  Label(String name)
+	| Instruction
+	| DataDecl (String name, LabelRefList labels)
+
+
+Instruction =
+      Nop()
+    | Syscall()
+	| Jal(JumpTarget target)
+	| J(JumpTarget target)
+	| Move(Register destination, Register source)
+    | Li(Register destination, int value)
+    | La(Register destination, LabelRef label)
+    | Lw(Register destination, Address addess)// one can use constant here but it is not good to do that
+    | Beqz(Register conditin, LabelRef label)
+    | Sw(Register content, Address addess)
+	| Bne(Register left, Register right, LabelRef label) //do we need this
+	| BneI(Register left, int rightI, LabelRef label) //do we need this
+	| BinaryOp(Operator op, Register result, Register left, Register right)
+	| BinaryOpI(Operator op, Register result, Register left, int rightI)
+
+//operand
+BaseAddress(int offset, Register reg)
+LabelRef(String name)
+Register(int number)
+
+JumpTarget =
+		LabelRef
+	 | Register
+
+Address =
+		LabelRef
+	|   BaseAddress
+
+Operator =
+	  Add()
+	| Mul()
+	| Sub()
+	| Slt()
+	| Seq()
+	| Xor()
+	| Or()
+	| And()
+	| Div()
+	| Rem()
+
+
+
+StmtList * Stmt
+LabelRefList * LabelRef
+
+attributes:
+
+Element.toString()
+	returns String
+	implemented by mips.printer.PrettyPrinter.elementToString
+
+	Element.sourceInfo
+	returns mips.printer.SourceInfo
+	implemented by mips.printer.SourceInfo.get	

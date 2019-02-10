@@ -1,0 +1,129 @@
+package exprs;
+
+import calculator.ast.*;
+import java_cup.runtime.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
+
+import java_cup.runtime.ComplexSymbolFactory.ComplexSymbol;
+
+
+class ExprParser;
+
+// Parser code to change the way the parser reports errors (include
+// line and column number of the error).
+parser code {:
+
+  public static class ParserError extends RuntimeException {
+        private int line;
+        private int column;
+
+        public ParserError(String message, int line, int column) {
+            super(message);
+            this.line = line;
+            this.column = column;
+        }
+
+
+        public int getLine() {
+            return line;
+        }
+
+        public int getColumn() {
+            return column;
+        }
+
+        @Override
+        public String toString() {
+            return "Parser error in line " + line + ":" + column + ": " + getMessage();
+        }
+    }
+
+    private Consumer<ParserError> onError;
+
+    public void onError(Consumer<ParserError> onError) {
+        this.onError = onError;
+    }
+
+
+    @Override
+    public void syntax_error(Symbol info) {
+
+        List<Integer> expectedTokens = expected_token_ids();
+
+        int line, column;
+        StringBuilder message = new StringBuilder("Unexpected token ");
+        if (info instanceof ComplexSymbol) {
+            ComplexSymbol s = (ComplexSymbol) info;
+            line = s.getLeft().getLine();
+            column = s.getLeft().getColumn();
+
+            message.append(s.getName());
+
+            if (s.value != null) {
+                message.append("(");
+                message.append(s.value);
+                message.append(")");
+            }
+        } else {
+            line = cur_token.left;
+            column = cur_token.right;
+        }
+
+        if (!expectedTokens.isEmpty()) {
+            message.append(", expected one of the following: ");
+            boolean first = true;
+            for (int expected : expectedTokens){
+                if (!first) {
+                    message.append(", ");
+                }
+                message.append(symbl_name_from_id(expected));
+                first = false;
+            }
+        }
+
+
+        ParserError err = new ParserError(message.toString(), line, column);
+        if (onError == null) {
+            System.err.println(err);
+        } else {
+            onError.accept(err);
+        }
+    }
+
+    @Override
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+    }
+
+:};
+
+
+
+/* ------------Declaration of Terminals and Non Terminals Section----------- */
+
+//Terminals (tokens returned by the scanner).
+terminal           PLUS, MINUS, TIMES, DIV, LPAREN, RPAREN, INVALID_TOKEN, NEGATION;
+terminal String   NUMBER;
+
+// Non terminals used in the grammar section.
+non terminal Expr    expr;
+
+/* Precedences */
+precedence left PLUS, MINUS;
+precedence left TIMES, DIV;
+precedence left NEGATION;
+
+
+/* ----------------------------Grammar Section-------------------- */
+
+expr ::=
+      expr:l PLUS expr:r {: RESULT = new ExprAdd(l, r); :}
+    | expr:l MINUS expr:r {: RESULT = new ExprSubtr(l, r); :}
+    | expr:l TIMES expr:r {: RESULT = new ExprMult(l, r); :}
+    | expr:l DIV expr:r {: RESULT = new ExprDiv(l, r); :}
+    | MINUS expr:e {: RESULT = new ExprNegation(e);:} %prec NEGATION
+  	| LPAREN expr:e RPAREN {: RESULT = e; :}
+    | NUMBER:n {: RESULT = new ExprNumber(n); :}
+  ;

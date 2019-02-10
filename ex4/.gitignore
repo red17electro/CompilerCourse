@@ -1,0 +1,10 @@
+.classpath
+.gradle/
+.project
+.idea
+*.iml
+*.ipr
+
+build/
+testoutput/
+src-generated/
